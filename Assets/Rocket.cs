@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class Rocket : MonoBehaviour
@@ -15,21 +16,31 @@ public class Rocket : MonoBehaviour
     [SerializeField] ParticleSystem successParticle;
     [SerializeField] ParticleSystem deathParticle;
 
+    MyLog myLog;
     Rigidbody rigidBody;
     AudioSource audioSource;
     enum State { Alive, Dying, Trancending }
     State state = State.Alive;
 
+    Vector3 startingLocation;
+    Quaternion startingRotation;
     // Start is called before the first frame update
     void Start()
     {
+        startingLocation = transform.position;
+        startingRotation = transform.rotation;
+        myLog = GetComponent<MyLog>();
         rigidBody = GetComponent<Rigidbody>();
         audioSource = GetComponent<AudioSource>();
+        PlayerStats.livesLeft = PlayerStats.MaxLives;
     }
 
     // Update is called once per frame
     void Update()
     {
+        myLog.Clear();
+        Debug.Log($"current Level: {PlayerStats.currentLevel}");
+        Debug.Log($"Lives Left: {PlayerStats.livesLeft}");
         if (state == State.Alive)
         {
             RespondToThrustInput();
@@ -60,15 +71,35 @@ public class Rocket : MonoBehaviour
         state = State.Trancending;
         PLayOneSound(success);
         successParticle.Play();
-        Invoke("LoadNextLevel", levelLoadingDelay);
+        PlayerStats.currentLevel += 1;
+        StartCoroutine(LoadNextLevel((int)PlayerStats.currentLevel, levelLoadingDelay));
     }
-   
+
     private void StartDeathSequence()
     {
         state = State.Dying;
         PLayOneSound(death);
         deathParticle.Play();
-        Invoke("LoadFirstLevel", levelLoadingDelay);
+        if (PlayerStats.livesLeft == 0 || PlayerStats.currentLevel == PlayerStats.Levels.one)
+        {
+            PlayerStats.livesLeft = PlayerStats.MaxLives;
+            PlayerStats.currentLevel = PlayerStats.Levels.one;
+            StartCoroutine(LoadNextLevel((int)PlayerStats.Levels.one, levelLoadingDelay));
+        }
+        else
+        {
+            state = State.Trancending;
+            StartCoroutine(Reset(levelLoadingDelay));
+        }
+    }
+    private IEnumerator Reset(float delayTime = 1f)
+    {
+        yield return new WaitForSeconds(delayTime);
+        PlayerStats.livesLeft--;
+        audioSource.Stop();
+        transform.position = startingLocation;
+        transform.rotation = startingRotation;
+        state = State.Alive;
     }
 
     private void PLayOneSound(AudioClip audioClip)
@@ -77,16 +108,10 @@ public class Rocket : MonoBehaviour
         audioSource.PlayOneShot(audioClip);
     }
 
-
-
-    private void LoadNextLevel()
+    private IEnumerator LoadNextLevel(int index = 0, float delayTime = 1f)
     {
-        SceneManager.LoadScene(1);
-        state = State.Alive;
-    }
-    private void LoadFirstLevel()
-    {
-        SceneManager.LoadScene(0);
+        yield return new WaitForSeconds(delayTime);
+        SceneManager.LoadScene(index);
         state = State.Alive;
     }
 
